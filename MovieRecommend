@@ -1,0 +1,64 @@
+import pandas as pd
+from sklearn.metrics.pairwise import cosine_similarity
+from tkinter import *
+from tkinter import messagebox
+
+data = {
+    'User': [1, 1, 1, 2, 2, 2, 3, 3, 4, 4],
+    'Movie': ['A', 'B', 'C', 'A', 'B', 'D', 'B', 'C', 'A', 'C'],
+    'Rating': [5, 3, 4, 4, 5, 3, 4, 2, 5, 4]
+}
+
+df = pd.DataFrame(data)
+user_movie_matrix = df.pivot_table(index='User', columns='Movie', values='Rating')
+user_movie_matrix.fillna(0, inplace=True)
+
+user_similarity = cosine_similarity(user_movie_matrix)
+user_similarity_df = pd.DataFrame(user_similarity, index=user_movie_matrix.index, columns=user_movie_matrix.index)
+
+def get_movie_recommendations(user_id, num_recommendations=2):
+    similar_users = user_similarity_df[user_id].sort_values(ascending=False)
+    recommendations = pd.Series(dtype='float64')
+    
+    for similar_user in similar_users.index:
+        if similar_user == user_id:
+            continue
+        similar_user_ratings = user_movie_matrix.loc[similar_user]
+        unseen_movies = similar_user_ratings[similar_user_ratings > 0].index.difference(user_movie_matrix.loc[user_id][user_movie_matrix.loc[user_id] > 0].index)
+        
+        for movie in unseen_movies:
+            if movie in recommendations:
+                recommendations[movie] += similar_user_ratings[movie] * similar_users[similar_user]
+            else:
+                recommendations[movie] = similar_user_ratings[movie] * similar_users[similar_user]
+    
+    return recommendations.sort_values(ascending=False).head(num_recommendations)
+
+def show_recommendations():
+    try:
+        user_id = int(user_id_entry.get())
+        if user_id not in user_movie_matrix.index:
+            messagebox.showerror("Error", "User ID not found")
+            return
+        recommendations = get_movie_recommendations(user_id)
+        recommendations_text = "\n".join([f"{movie}: {round(score, 2)}" for movie, score in recommendations.items()])
+        result_label.config(text=f"Recommendations for User {user_id}:\n{recommendations_text}")
+    except ValueError:
+        messagebox.showerror("Error", "Please enter a valid User ID")
+
+root = Tk()
+root.title("Movie Recommendation System")
+
+user_id_label = Label(root, text="Enter User ID:")
+user_id_label.pack()
+
+user_id_entry = Entry(root)
+user_id_entry.pack()
+
+recommend_button = Button(root, text="Get Recommendations", command=show_recommendations)
+recommend_button.pack()
+
+result_label = Label(root, text="")
+result_label.pack()
+
+root.mainloop()
